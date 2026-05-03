@@ -3,8 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'add_property_screen.dart';
-import 'chat_screen.dart';
-import 'booking_screen.dart';
+import 'property_detail_screen.dart';
+import 'my_bookings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -53,67 +53,26 @@ class _HomeScreenState extends State<HomeScreen> {
         .map((doc) => doc.exists);
   }
 
-  // 🔥 PRICE ESTIMATOR
-  Map<String, dynamic> estimatePrice(
-      Map<String, dynamic> property,
-      List<QueryDocumentSnapshot> allProperties) {
-
-    double totalWeight = 0;
-    double weightedSum = 0;
-    int comparableCount = 0;
-
-    for (var doc in allProperties) {
-      final data = doc.data() as Map<String, dynamic>;
-
-      // Skip same property
-      if (data['title'] == property['title']) continue;
-
-      final price = (data['price'] as num).toDouble();
-      final size = (data['size'] as num).toDouble();
-      final condition = (data['condition'] as num).toDouble();
-
-      final targetSize = (property['size'] as num).toDouble();
-      final targetCondition = (property['condition'] as num).toDouble();
-
-      double sizeScore = 1 - ((size - targetSize).abs() / targetSize);
-      sizeScore = sizeScore.clamp(0, 1);
-
-      double conditionScore = 1 - ((condition - targetCondition).abs() / 5);
-      conditionScore = conditionScore.clamp(0, 1);
-
-      double weight = (0.6 * sizeScore) + (0.4 * conditionScore);
-
-      weightedSum += price * weight;
-      totalWeight += weight;
-
-      comparableCount++;
-    }
-
-    double estimated =
-        totalWeight > 0 ? weightedSum / totalWeight : 0;
-
-    String confidence;
-    if (comparableCount > 5) {
-      confidence = "High";
-    } else if (comparableCount >= 3) {
-      confidence = "Medium";
-    } else {
-      confidence = "Low";
-    }
-
-    return {
-      'price': estimated.toStringAsFixed(0),
-      'confidence': confidence,
-      'count': comparableCount
-    };
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text("PropertyPulse"),
         actions: [
+          // 📅 My Bookings
+          IconButton(
+            icon: const Icon(Icons.calendar_today),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const MyBookingsScreen(),
+                ),
+              );
+            },
+          ),
+
+          // 🚪 Logout
           IconButton(
             onPressed: () async {
               await FirebaseAuth.instance.signOut();
@@ -125,14 +84,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
       body: Column(
         children: [
-          // 🔍 Search
+          // 🔍 SEARCH BAR
           Padding(
             padding: const EdgeInsets.all(10),
             child: TextField(
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: "Search by title or location",
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.search),
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    setState(() {
+                      searchText = "";
+                    });
+                  },
+                ),
               ),
               onChanged: (value) {
                 setState(() {
@@ -142,7 +109,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // 💰 Price Filter
+          // 💰 PRICE FILTER
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: Column(
@@ -164,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // 📦 Property List
+          // 📦 PROPERTY LIST
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -174,21 +141,26 @@ class _HomeScreenState extends State<HomeScreen> {
               builder: (context, snapshot) {
 
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(
+                    child: CircularProgressIndicator(),
+                  );
                 }
 
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(child: Text("No properties found"));
+                  return const Center(
+                    child: Text("No properties found"),
+                  );
                 }
 
-                final allDocs = snapshot.data!.docs;
-
-                final filtered = allDocs.where((doc) {
+                final filtered = snapshot.data!.docs.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
 
-                  final title = data['title'].toString().toLowerCase();
-                  final location = data['location'].toString().toLowerCase();
-                  final price = (data['price'] as num).toDouble();
+                  final title =
+                      data['title'].toString().toLowerCase();
+                  final location =
+                      data['location'].toString().toLowerCase();
+                  final price =
+                      (data['price'] as num).toDouble();
 
                   return (title.contains(searchText) ||
                           location.contains(searchText)) &&
@@ -199,67 +171,62 @@ class _HomeScreenState extends State<HomeScreen> {
                   itemCount: filtered.length,
                   itemBuilder: (context, index) {
                     final doc = filtered[index];
-                    final data = doc.data() as Map<String, dynamic>;
-
-                    final estimate =
-                        estimatePrice(data, allDocs);
+                    final data =
+                        doc.data() as Map<String, dynamic>;
 
                     return Card(
+                      elevation: 6,
+                      shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(12),
+                      ),
                       margin: const EdgeInsets.all(10),
                       child: ListTile(
-                        title: Text(data['title']),
+                        title: Text(
+                          data['title'],
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold),
+                        ),
                         subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
                           children: [
-                            Text("Price: \$${data['price']}"),
-                            Text("Size: ${data['size']} sqft"),
-                            Text("Location: ${data['location']}"),
-                            Text("Condition: ${data['condition']}"),
-
-                            // 🔥 Estimator Output
-                            Text("Est. Price: \$${estimate['price']}"),
-                            Text(
-                                "Confidence: ${estimate['confidence']} (${estimate['count']} comps)"),
-
-                            // 📅 Booking
-                            TextButton(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        BookingScreen(propertyId: doc.id),
-                                  ),
-                                );
-                              },
-                              child: const Text("Book Viewing"),
-                            ),
+                            const SizedBox(height: 5),
+                            Text("💰 \$${data['price']}"),
+                            Text("📏 ${data['size']} sqft"),
+                            Text("📍 ${data['location']}"),
+                            Text("🏠 Condition: ${data['condition']}"),
                           ],
                         ),
 
-                        // 💬 Chat
+                        // 👉 OPEN DETAILS SCREEN
                         onTap: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (_) =>
-                                  ChatScreen(propertyId: doc.id),
+                                  PropertyDetailScreen(
+                                propertyId: doc.id,
+                                data: data,
+                              ),
                             ),
                           );
                         },
 
-                        // ❤️ Favorite
+                        // ❤️ FAVORITE BUTTON
                         trailing: StreamBuilder<bool>(
                           stream: isFavorite(doc.id),
                           builder: (context, snapshot) {
-                            final isFav = snapshot.data ?? false;
+                            final isFav =
+                                snapshot.data ?? false;
 
                             return IconButton(
                               icon: Icon(
                                 isFav
                                     ? Icons.favorite
                                     : Icons.favorite_border,
-                                color: isFav ? Colors.red : null,
+                                color:
+                                    isFav ? Colors.red : null,
                               ),
                               onPressed: () {
                                 toggleFavorite(doc.id);
@@ -277,13 +244,14 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
 
-      // ➕ Add Property
+      // ➕ ADD PROPERTY BUTTON
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => const AddPropertyScreen(),
+              builder: (_) =>
+                  const AddPropertyScreen(),
             ),
           );
         },

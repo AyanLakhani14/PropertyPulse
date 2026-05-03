@@ -13,10 +13,43 @@ class BookingScreen extends StatefulWidget {
 
 class _BookingScreenState extends State<BookingScreen> {
   DateTime? selectedDate;
+  TimeOfDay? selectedTime;
+
+  Future<void> pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2030),
+    );
+
+    if (picked != null) {
+      setState(() => selectedDate = picked);
+    }
+  }
+
+  Future<void> pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+    );
+
+    if (picked != null) {
+      setState(() => selectedTime = picked);
+    }
+  }
 
   void bookAppointment() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null || selectedDate == null) return;
+    if (user == null || selectedDate == null || selectedTime == null) return;
+
+    final fullDateTime = DateTime(
+      selectedDate!.year,
+      selectedDate!.month,
+      selectedDate!.day,
+      selectedTime!.hour,
+      selectedTime!.minute,
+    );
 
     final appointmentRef =
         FirebaseFirestore.instance.collection('appointments');
@@ -24,7 +57,7 @@ class _BookingScreenState extends State<BookingScreen> {
     // 🔥 Prevent double booking
     final existing = await appointmentRef
         .where('propertyId', isEqualTo: widget.propertyId)
-        .where('timeSlot', isEqualTo: selectedDate)
+        .where('timeSlot', isEqualTo: fullDateTime)
         .get();
 
     if (existing.docs.isNotEmpty) {
@@ -37,7 +70,7 @@ class _BookingScreenState extends State<BookingScreen> {
     await appointmentRef.add({
       'propertyId': widget.propertyId,
       'userId': user.uid,
-      'timeSlot': selectedDate,
+      'timeSlot': fullDateTime,
       'createdAt': Timestamp.now(),
     });
 
@@ -46,21 +79,6 @@ class _BookingScreenState extends State<BookingScreen> {
     );
 
     Navigator.pop(context);
-  }
-
-  Future<void> pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime(2030),
-    );
-
-    if (picked != null) {
-      setState(() {
-        selectedDate = picked;
-      });
-    }
   }
 
   @override
@@ -76,20 +94,23 @@ class _BookingScreenState extends State<BookingScreen> {
               child: const Text("Select Date"),
             ),
 
-            const SizedBox(height: 20),
+            Text(selectedDate?.toString() ?? "No date selected"),
 
-            Text(
-              selectedDate != null
-                  ? selectedDate.toString()
-                  : "No date selected",
+            const SizedBox(height: 10),
+
+            ElevatedButton(
+              onPressed: pickTime,
+              child: const Text("Select Time"),
             ),
+
+            Text(selectedTime?.format(context) ?? "No time selected"),
 
             const SizedBox(height: 30),
 
             ElevatedButton(
               onPressed: bookAppointment,
               child: const Text("Confirm Booking"),
-            )
+            ),
           ],
         ),
       ),
