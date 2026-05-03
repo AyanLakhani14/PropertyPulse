@@ -18,33 +18,36 @@ class _HomeScreenState extends State<HomeScreen> {
   String searchText = "";
   double maxPrice = 1000000;
 
-  // ❤️ Toggle Favorite
+  // ❤️ TOGGLE FAVORITE
   void toggleFavorite(String propertyId) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final favRef = FirebaseFirestore.instance
+    final ref = FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
         .collection('favorites')
         .doc(propertyId);
 
-    final doc = await favRef.get();
+    final doc = await ref.get();
 
     if (doc.exists) {
-      await favRef.delete();
+      await ref.delete();
     } else {
-      await favRef.set({'savedAt': Timestamp.now()});
+      await ref.set({
+        'savedAt': Timestamp.now(),
+      });
     }
   }
 
-  // ❤️ Check Favorite
+  // ❤️ CHECK FAVORITE
   Stream<bool> isFavorite(String propertyId) {
     final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return const Stream.empty();
 
     return FirebaseFirestore.instance
         .collection('users')
-        .doc(user?.uid)
+        .doc(user.uid)
         .collection('favorites')
         .doc(propertyId)
         .snapshots()
@@ -90,13 +93,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
       body: Column(
         children: [
-          // 🔍 Search
+
+          // 🔍 SEARCH
           Padding(
             padding: const EdgeInsets.all(10),
             child: TextField(
               decoration: InputDecoration(
-                hintText: "Search properties",
+                hintText: "Search by title or location",
                 border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.search),
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.clear),
                   onPressed: () {
@@ -112,60 +117,111 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // 📦 List
+          // 💰 PRICE FILTER
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Column(
+              children: [
+                const Text("Max Price"),
+                Slider(
+                  min: 0,
+                  max: 1000000,
+                  divisions: 20,
+                  value: maxPrice,
+                  label: "\$${maxPrice.toInt()}",
+                  onChanged: (value) {
+                    setState(() {
+                      maxPrice = value;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+
+          // 📦 PROPERTY LIST
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('properties')
                   .snapshots(),
+
               builder: (context, snapshot) {
 
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
+                if (snapshot.connectionState ==
+                    ConnectionState.waiting) {
+                  return const Center(
+                      child: CircularProgressIndicator());
                 }
 
-                final docs = snapshot.data!.docs.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  return data['title']
-                      .toString()
-                      .toLowerCase()
-                      .contains(searchText);
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text("Error: ${snapshot.error}"),
+                  );
+                }
+
+                if (!snapshot.hasData ||
+                    snapshot.data!.docs.isEmpty) {
+                  return const Center(
+                    child: Text("No properties found"),
+                  );
+                }
+
+                final filtered = snapshot.data!.docs.where((doc) {
+                  final data =
+                      doc.data() as Map<String, dynamic>;
+
+                  final title =
+                      (data['title'] ?? "").toString().toLowerCase();
+                  final location =
+                      (data['location'] ?? "").toString().toLowerCase();
+                  final price =
+                      (data['price'] ?? 0).toDouble();
+
+                  return (title.contains(searchText) ||
+                          location.contains(searchText)) &&
+                      price <= maxPrice;
                 }).toList();
 
                 return ListView.builder(
-                  itemCount: docs.length,
+                  itemCount: filtered.length,
                   itemBuilder: (context, index) {
-                    final doc = docs[index];
-                    final data = doc.data() as Map<String, dynamic>;
+
+                    final doc = filtered[index];
+                    final data =
+                        doc.data() as Map<String, dynamic>;
 
                     return Card(
+                      elevation: 5,
                       margin: const EdgeInsets.all(10),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.all(10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(10),
+                      ),
 
-                        // 🖼️ IMAGE
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            data['image'] ??
-                                "https://via.placeholder.com/150",
-                            width: 70,
-                            height: 70,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
+                      child: ListTile(
+                        contentPadding:
+                            const EdgeInsets.all(10),
+
+                        // ❌ IMAGE REMOVED
+                        leading: const Icon(Icons.home),
 
                         title: Text(
-                          data['title'],
+                          data['title'] ?? "No Title",
                           style: const TextStyle(
                               fontWeight: FontWeight.bold),
                         ),
 
                         subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
                           children: [
-                            Text("💰 \$${data['price']}"),
-                            Text("📍 ${data['location']}"),
+                            const SizedBox(height: 5),
+                            Text("💰 \$${data['price'] ?? 0}"),
+                            Text("📏 ${data['size'] ?? 0} sqft"),
+                            Text("📍 ${data['location'] ?? ""}"),
+                            Text(
+                                "🏠 Condition: ${data['condition'] ?? ""}"),
                           ],
                         ),
 
@@ -173,7 +229,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => PropertyDetailScreen(
+                              builder: (_) =>
+                                  PropertyDetailScreen(
                                 propertyId: doc.id,
                                 data: data,
                               ),
@@ -184,18 +241,19 @@ class _HomeScreenState extends State<HomeScreen> {
                         trailing: StreamBuilder<bool>(
                           stream: isFavorite(doc.id),
                           builder: (context, snapshot) {
-                            final isFav = snapshot.data ?? false;
+                            final fav =
+                                snapshot.data ?? false;
 
                             return IconButton(
                               icon: Icon(
-                                isFav
+                                fav
                                     ? Icons.favorite
                                     : Icons.favorite_border,
-                                color: isFav ? Colors.red : null,
+                                color:
+                                    fav ? Colors.red : null,
                               ),
-                              onPressed: () {
-                                toggleFavorite(doc.id);
-                              },
+                              onPressed: () =>
+                                  toggleFavorite(doc.id),
                             );
                           },
                         ),
@@ -214,7 +272,8 @@ class _HomeScreenState extends State<HomeScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => const AddPropertyScreen(),
+              builder: (_) =>
+                  const AddPropertyScreen(),
             ),
           );
         },

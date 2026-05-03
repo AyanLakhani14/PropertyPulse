@@ -20,6 +20,7 @@ class _BookingScreenState extends State<BookingScreen> {
   DateTime? selectedDate;
   TimeOfDay? selectedTime;
 
+  // 📅 PICK DATE
   Future<void> pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -33,6 +34,7 @@ class _BookingScreenState extends State<BookingScreen> {
     }
   }
 
+  // ⏰ PICK TIME
   Future<void> pickTime() async {
     final picked = await showTimePicker(
       context: context,
@@ -44,7 +46,8 @@ class _BookingScreenState extends State<BookingScreen> {
     }
   }
 
-  void bookAppointment() async {
+  // 🔥 BOOK
+  Future<void> bookAppointment() async {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null ||
@@ -64,32 +67,34 @@ class _BookingScreenState extends State<BookingScreen> {
       selectedTime!.minute,
     );
 
-    final appointmentRef =
-        FirebaseFirestore.instance.collection('appointments');
+    final ref =
+        FirebaseFirestore.instance.collection('bookings');
 
-    // 🔥 Prevent double booking
-    final existing = await appointmentRef
+    // 🚫 Prevent double booking
+    final existing = await ref
         .where('propertyId', isEqualTo: widget.propertyId)
         .where('timeSlot', isEqualTo: fullDateTime)
         .get();
 
     if (existing.docs.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Time slot already booked")),
+        const SnackBar(content: Text("Time already booked")),
       );
       return;
     }
 
-    await appointmentRef.add({
+    // ✅ SAVE BOOKING
+    await ref.add({
       'propertyId': widget.propertyId,
-      'propertyTitle': widget.propertyTitle, // ✅ FIXED
+      'propertyTitle': widget.propertyTitle,
       'userId': user.uid,
       'timeSlot': fullDateTime,
+      'status': 'confirmed', // important
       'createdAt': Timestamp.now(),
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Booking successful")),
+      const SnackBar(content: Text("Booking confirmed")),
     );
 
     Navigator.pop(context);
@@ -103,6 +108,8 @@ class _BookingScreenState extends State<BookingScreen> {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
+
+            // 📅 DATE
             ElevatedButton(
               onPressed: pickDate,
               child: const Text("Select Date"),
@@ -116,6 +123,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
             const SizedBox(height: 10),
 
+            // ⏰ TIME
             ElevatedButton(
               onPressed: pickTime,
               child: const Text("Select Time"),
@@ -129,6 +137,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
             const SizedBox(height: 30),
 
+            // ✅ CONFIRM
             ElevatedButton(
               onPressed: bookAppointment,
               child: const Text("Confirm Booking"),
