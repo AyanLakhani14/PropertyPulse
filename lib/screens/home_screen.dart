@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'add_property_screen.dart';
+import 'chat_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,7 +15,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String searchText = "";
   double maxPrice = 1000000;
 
-  // 🔥 Toggle Favorite
+  // ❤️ Toggle Favorite
   void toggleFavorite(String propertyId) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -36,7 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // 🔥 Check if Favorite
+  // ❤️ Check Favorite
   Stream<bool> isFavorite(String propertyId) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return const Stream.empty();
@@ -52,6 +53,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("PropertyPulse"),
@@ -155,6 +158,17 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
 
+                        // 👉 OPEN CHAT ON TAP
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  ChatScreen(propertyId: doc.id),
+                            ),
+                          );
+                        },
+
                         // ❤️ Favorite Button
                         trailing: StreamBuilder<bool>(
                           stream: isFavorite(doc.id),
@@ -184,7 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
 
-      // ➕ Add Property Button
+      // ➕ Add Property
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(
