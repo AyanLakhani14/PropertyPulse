@@ -53,6 +53,61 @@ class _HomeScreenState extends State<HomeScreen> {
         .map((doc) => doc.exists);
   }
 
+  // 🔥 PRICE ESTIMATOR
+  Map<String, dynamic> estimatePrice(
+      Map<String, dynamic> property,
+      List<QueryDocumentSnapshot> allProperties) {
+
+    double totalWeight = 0;
+    double weightedSum = 0;
+    int comparableCount = 0;
+
+    for (var doc in allProperties) {
+      final data = doc.data() as Map<String, dynamic>;
+
+      // Skip same property
+      if (data['title'] == property['title']) continue;
+
+      final price = (data['price'] as num).toDouble();
+      final size = (data['size'] as num).toDouble();
+      final condition = (data['condition'] as num).toDouble();
+
+      final targetSize = (property['size'] as num).toDouble();
+      final targetCondition = (property['condition'] as num).toDouble();
+
+      double sizeScore = 1 - ((size - targetSize).abs() / targetSize);
+      sizeScore = sizeScore.clamp(0, 1);
+
+      double conditionScore = 1 - ((condition - targetCondition).abs() / 5);
+      conditionScore = conditionScore.clamp(0, 1);
+
+      double weight = (0.6 * sizeScore) + (0.4 * conditionScore);
+
+      weightedSum += price * weight;
+      totalWeight += weight;
+
+      comparableCount++;
+    }
+
+    double estimated =
+        totalWeight > 0 ? weightedSum / totalWeight : 0;
+
+    String confidence;
+    if (comparableCount > 5) {
+      confidence = "High";
+    } else if (comparableCount >= 3) {
+      confidence = "Medium";
+    } else {
+      confidence = "Low";
+    }
+
+    return {
+      'price': estimated.toStringAsFixed(0),
+      'confidence': confidence,
+      'count': comparableCount
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -126,7 +181,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   return const Center(child: Text("No properties found"));
                 }
 
-                final filtered = snapshot.data!.docs.where((doc) {
+                final allDocs = snapshot.data!.docs;
+
+                final filtered = allDocs.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
 
                   final title = data['title'].toString().toLowerCase();
@@ -144,6 +201,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     final doc = filtered[index];
                     final data = doc.data() as Map<String, dynamic>;
 
+                    final estimate =
+                        estimatePrice(data, allDocs);
+
                     return Card(
                       margin: const EdgeInsets.all(10),
                       child: ListTile(
@@ -156,13 +216,19 @@ class _HomeScreenState extends State<HomeScreen> {
                             Text("Location: ${data['location']}"),
                             Text("Condition: ${data['condition']}"),
 
-                            // 📅 Booking Button
+                            // 🔥 Estimator Output
+                            Text("Est. Price: \$${estimate['price']}"),
+                            Text(
+                                "Confidence: ${estimate['confidence']} (${estimate['count']} comps)"),
+
+                            // 📅 Booking
                             TextButton(
                               onPressed: () {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => BookingScreen(propertyId: doc.id),
+                                    builder: (_) =>
+                                        BookingScreen(propertyId: doc.id),
                                   ),
                                 );
                               },
@@ -171,17 +237,18 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
 
-                        // 💬 Chat on Tap
+                        // 💬 Chat
                         onTap: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => ChatScreen(propertyId: doc.id),
+                              builder: (_) =>
+                                  ChatScreen(propertyId: doc.id),
                             ),
                           );
                         },
 
-                        // ❤️ Favorite Button
+                        // ❤️ Favorite
                         trailing: StreamBuilder<bool>(
                           stream: isFavorite(doc.id),
                           builder: (context, snapshot) {
