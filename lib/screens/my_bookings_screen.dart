@@ -15,24 +15,25 @@ class MyBookingsScreen extends StatelessWidget {
         stream: FirebaseFirestore.instance
             .collection('appointments')
             .where('userId', isEqualTo: user?.uid)
-            .orderBy('timeSlot')
-            .snapshots(),
+            .snapshots(), // ❌ removed orderBy for now
         builder: (context, snapshot) {
 
-          if (!snapshot.hasData) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
+          }
+
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(child: Text("No bookings yet"));
           }
 
           final bookings = snapshot.data!.docs;
 
-          if (bookings.isEmpty) {
-            return const Center(child: Text("No bookings yet"));
-          }
-
           return ListView.builder(
             itemCount: bookings.length,
             itemBuilder: (context, index) {
-              final data = bookings[index];
+              final data =
+                  bookings[index].data() as Map<String, dynamic>;
+
               final date =
                   (data['timeSlot'] as Timestamp).toDate();
 
@@ -40,7 +41,10 @@ class MyBookingsScreen extends StatelessWidget {
                 margin: const EdgeInsets.all(10),
                 child: ListTile(
                   title: Text("Property: ${data['propertyId']}"),
-                  subtitle: Text(date.toString()),
+                  subtitle: Text(
+                    "${date.day}/${date.month}/${date.year} "
+                    "${date.hour}:${date.minute}",
+                  ),
                 ),
               );
             },
