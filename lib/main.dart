@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const PropertyPulseApp());
 }
 
@@ -25,7 +31,7 @@ class HomeScreen extends StatelessWidget {
     return const Scaffold(
       body: Center(
         child: Text(
-          'PropertyPulse',
+          'Firebase Connected ✅',
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
       ),
