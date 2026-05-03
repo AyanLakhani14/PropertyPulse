@@ -21,35 +21,48 @@ class PropertyDetailScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+
+            // 🖼️ IMAGE
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(
+                data['image'] ??
+                    "https://via.placeholder.com/300",
+                width: double.infinity,
+                height: 200,
+                fit: BoxFit.cover,
+              ),
+            ),
+
+            const SizedBox(height: 15),
+
             Text(
               data['title'],
               style: const TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.bold,
-              ),
+                  fontSize: 24, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 15),
 
-            Text("💰 Price: \$${data['price']}"),
-            Text("📏 Size: ${data['size']} sqft"),
-            Text("📍 Location: ${data['location']}"),
+            const SizedBox(height: 10),
+
+            Text("💰 \$${data['price']}"),
+            Text("📍 ${data['location']}"),
+            Text("📏 ${data['size']} sqft"),
             Text("🏠 Condition: ${data['condition']}"),
 
-            const SizedBox(height: 30),
+            const SizedBox(height: 20),
 
             ElevatedButton(
               onPressed: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => ChatScreen(propertyId: propertyId),
+                    builder: (_) =>
+                        ChatScreen(propertyId: propertyId),
                   ),
                 );
               },
-              child: const Text("Chat with Seller"),
+              child: const Text("Chat"),
             ),
-
-            const SizedBox(height: 10),
 
             ElevatedButton(
               onPressed: () {
@@ -58,7 +71,7 @@ class PropertyDetailScreen extends StatelessWidget {
                   MaterialPageRoute(
                     builder: (_) => BookingScreen(
                       propertyId: propertyId,
-                      propertyTitle: data['title'], // ✅ FIX
+                      propertyTitle: data['title'],
                     ),
                   ),
                 );

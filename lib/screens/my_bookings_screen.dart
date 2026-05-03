@@ -5,18 +5,30 @@ import 'package:firebase_auth/firebase_auth.dart';
 class MyBookingsScreen extends StatelessWidget {
   const MyBookingsScreen({super.key});
 
+  // 🔥 Better date formatting
   String formatDate(DateTime date) {
-    return "${date.day}/${date.month}/${date.year} "
-        "${date.hour}:${date.minute.toString().padLeft(2, '0')}";
+    const months = [
+      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    ];
+
+    final hour = date.hour > 12 ? date.hour - 12 : date.hour;
+    final period = date.hour >= 12 ? "PM" : "AM";
+
+    return "${months[date.month - 1]} ${date.day}, "
+        "$hour:${date.minute.toString().padLeft(2, '0')} $period";
   }
 
-  // 🔥 Cancel booking function
+  // 🔥 Cancel booking with confirmation
   Future<void> cancelBooking(BuildContext context, String docId) async {
     final confirm = await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
         title: const Text("Cancel Booking"),
-        content: const Text("Are you sure you want to cancel this booking?"),
+        content: const Text("Are you sure you want to cancel this viewing?"),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -24,7 +36,10 @@ class MyBookingsScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text("Yes"),
+            child: const Text(
+              "Yes",
+              style: TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
@@ -47,7 +62,10 @@ class MyBookingsScreen extends StatelessWidget {
     final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
-      appBar: AppBar(title: const Text("My Bookings")),
+      appBar: AppBar(
+        title: const Text("My Bookings"),
+        centerTitle: true,
+      ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('appointments')
@@ -60,12 +78,18 @@ class MyBookingsScreen extends StatelessWidget {
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text("No bookings yet"));
+            return const Center(
+              child: Text(
+                "No bookings yet",
+                style: TextStyle(fontSize: 16),
+              ),
+            );
           }
 
           final bookings = snapshot.data!.docs;
 
           return ListView.builder(
+            padding: const EdgeInsets.all(10),
             itemCount: bookings.length,
             itemBuilder: (context, index) {
               final doc = bookings[index];
@@ -74,27 +98,65 @@ class MyBookingsScreen extends StatelessWidget {
               final date =
                   (data['timeSlot'] as Timestamp).toDate();
 
-              return Card(
-                elevation: 5,
-                margin: const EdgeInsets.all(10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.2),
+                      blurRadius: 6,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
-                child: ListTile(
-                  leading: const Icon(Icons.home),
-                  title: Text(
-                    data['propertyTitle'] ?? "Unknown Property",
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Text(formatDate(date)),
+                child: Row(
+                  children: [
+                    // 🏠 Icon
+                    const Icon(
+                      Icons.home,
+                      size: 40,
+                      color: Colors.blue,
+                    ),
 
-                  // 🔥 CANCEL BUTTON
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red),
-                    onPressed: () {
-                      cancelBooking(context, doc.id);
-                    },
-                  ),
+                    const SizedBox(width: 15),
+
+                    // 📄 Info
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            data['propertyTitle'] ?? "Unknown Property",
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+
+                          const SizedBox(height: 5),
+
+                          Row(
+                            children: [
+                              const Icon(Icons.calendar_today, size: 14),
+                              const SizedBox(width: 5),
+                              Text(formatDate(date)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // 🗑️ Delete Button
+                    IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () {
+                        cancelBooking(context, doc.id);
+                      },
+                    ),
+                  ],
                 ),
               );
             },
