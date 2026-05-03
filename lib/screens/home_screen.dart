@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-import 'add_property_screen.dart';
-import 'property_detail_screen.dart';
 import 'favorites_screen.dart';
+import 'property_detail_screen.dart';
+import 'add_property_screen.dart';
 import 'my_bookings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -18,16 +18,14 @@ class _HomeScreenState extends State<HomeScreen> {
   String searchText = "";
   double maxPrice = 1000000;
 
-  // ❤️ TOGGLE FAVORITE
-  void toggleFavorite(String propertyId) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+  final user = FirebaseAuth.instance.currentUser;
 
+  // 🔥 FAVORITE TOGGLE
+  Future<void> toggleFavorite(
+      String propertyId, Map<String, dynamic> data) async {
     final ref = FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
         .collection('favorites')
-        .doc(propertyId);
+        .doc('${user!.uid}_$propertyId');
 
     final doc = await ref.get();
 
@@ -35,23 +33,41 @@ class _HomeScreenState extends State<HomeScreen> {
       await ref.delete();
     } else {
       await ref.set({
-        'savedAt': Timestamp.now(),
+        'userId': user!.uid,
+        'propertyId': propertyId,
+        'title': data['title'],
+        'price': data['price'],
+        'createdAt': Timestamp.now(),
       });
     }
   }
 
-  // ❤️ CHECK FAVORITE
-  Stream<bool> isFavorite(String propertyId) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return const Stream.empty();
-
+  // 🔥 CHECK FAVORITE
+  Stream<bool> isFavorited(String propertyId) {
     return FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
         .collection('favorites')
-        .doc(propertyId)
+        .doc('${user!.uid}_$propertyId')
         .snapshots()
         .map((doc) => doc.exists);
+  }
+
+  // 🔍 SEARCH FILTER
+  bool matchesSearch(Map<String, dynamic> data) {
+    final title = (data['title'] ?? "").toString().toLowerCase();
+    final location = (data['location'] ?? "").toString().toLowerCase();
+
+    return title.contains(searchText) || location.contains(searchText);
+  }
+
+  // 💰 PRICE FILTER
+  bool matchesPrice(Map<String, dynamic> data) {
+    final price = (data['price'] ?? 0).toDouble();
+    return price <= maxPrice;
+  }
+
+  // 🧠 COMBINED FILTER
+  bool shouldShow(Map<String, dynamic> data) {
+    return matchesSearch(data) && matchesPrice(data);
   }
 
   @override
@@ -66,8 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const FavoritesScreen(),
-                ),
+                    builder: (_) => const FavoritesScreen()),
               );
             },
           ),
@@ -77,8 +92,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const MyBookingsScreen(),
-                ),
+                    builder: (_) => const MyBookingsScreen()),
               );
             },
           ),
@@ -86,6 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await FirebaseAuth.instance.signOut();
+              Navigator.pushReplacementNamed(context, '/login');
             },
           ),
         ],
@@ -93,15 +108,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
       body: Column(
         children: [
-
-          // 🔍 SEARCH
+          // 🔍 SEARCH BAR
           Padding(
             padding: const EdgeInsets.all(10),
             child: TextField(
               decoration: InputDecoration(
                 hintText: "Search by title or location",
-                border: const OutlineInputBorder(),
                 prefixIcon: const Icon(Icons.search),
+                border: const OutlineInputBorder(),
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.clear),
                   onPressed: () {
@@ -117,18 +131,17 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // 💰 PRICE FILTER
+          // 💰 PRICE SLIDER
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: Column(
               children: [
-                const Text("Max Price"),
+                Text("Max Price: \$${maxPrice.toInt()}"),
                 Slider(
                   min: 0,
                   max: 1000000,
                   divisions: 20,
                   value: maxPrice,
-                  label: "\$${maxPrice.toInt()}",
                   onChanged: (value) {
                     setState(() {
                       maxPrice = value;
@@ -145,7 +158,6 @@ class _HomeScreenState extends State<HomeScreen> {
               stream: FirebaseFirestore.instance
                   .collection('properties')
                   .snapshots(),
-
               builder: (context, snapshot) {
 
                 if (snapshot.connectionState ==
@@ -154,42 +166,26 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: CircularProgressIndicator());
                 }
 
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Text("Error: ${snapshot.error}"),
-                  );
-                }
-
                 if (!snapshot.hasData ||
                     snapshot.data!.docs.isEmpty) {
                   return const Center(
-                    child: Text("No properties found"),
-                  );
+                      child: Text("No properties found"));
                 }
 
-                final filtered = snapshot.data!.docs.where((doc) {
+                final docs = snapshot.data!.docs.where((doc) {
                   final data =
                       doc.data() as Map<String, dynamic>;
-
-                  final title =
-                      (data['title'] ?? "").toString().toLowerCase();
-                  final location =
-                      (data['location'] ?? "").toString().toLowerCase();
-                  final price =
-                      (data['price'] ?? 0).toDouble();
-
-                  return (title.contains(searchText) ||
-                          location.contains(searchText)) &&
-                      price <= maxPrice;
+                  return shouldShow(data);
                 }).toList();
 
                 return ListView.builder(
-                  itemCount: filtered.length,
+                  itemCount: docs.length,
                   itemBuilder: (context, index) {
 
-                    final doc = filtered[index];
+                    final doc = docs[index];
                     final data =
                         doc.data() as Map<String, dynamic>;
+                    final propertyId = doc.id;
 
                     return Card(
                       elevation: 5,
@@ -198,13 +194,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         borderRadius:
                             BorderRadius.circular(10),
                       ),
-
                       child: ListTile(
                         contentPadding:
                             const EdgeInsets.all(10),
 
-                        // ❌ IMAGE REMOVED
-                        leading: const Icon(Icons.home),
+                        leading:
+                            const Icon(Icons.home, size: 32),
 
                         title: Text(
                           data['title'] ?? "No Title",
@@ -225,21 +220,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
 
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  PropertyDetailScreen(
-                                propertyId: doc.id,
-                                data: data,
-                              ),
-                            ),
-                          );
-                        },
-
                         trailing: StreamBuilder<bool>(
-                          stream: isFavorite(doc.id),
+                          stream: isFavorited(propertyId),
                           builder: (context, snapshot) {
                             final fav =
                                 snapshot.data ?? false;
@@ -249,14 +231,28 @@ class _HomeScreenState extends State<HomeScreen> {
                                 fav
                                     ? Icons.favorite
                                     : Icons.favorite_border,
-                                color:
-                                    fav ? Colors.red : null,
+                                color: fav
+                                    ? Colors.red
+                                    : Colors.grey,
                               ),
-                              onPressed: () =>
-                                  toggleFavorite(doc.id),
+                              onPressed: () => toggleFavorite(
+                                  propertyId, data),
                             );
                           },
                         ),
+
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  PropertyDetailScreen(
+                                propertyId: propertyId,
+                                data: data,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     );
                   },
@@ -267,14 +263,13 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
 
+      // ➕ ADD PROPERTY
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) =>
-                  const AddPropertyScreen(),
-            ),
+                builder: (_) => const AddPropertyScreen()),
           );
         },
         child: const Icon(Icons.add),

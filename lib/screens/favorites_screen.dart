@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'property_detail_screen.dart';
 
 class FavoritesScreen extends StatelessWidget {
   const FavoritesScreen({super.key});
@@ -14,68 +13,79 @@ class FavoritesScreen extends StatelessWidget {
       appBar: AppBar(title: const Text("Favorites")),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(user?.uid)
             .collection('favorites')
+            .where('userId', isEqualTo: user?.uid)
             .snapshots(),
         builder: (context, snapshot) {
 
-          if (!snapshot.hasData) {
+          // 🔄 Loading
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final favs = snapshot.data!.docs;
+          // ❌ Error
+          if (snapshot.hasError) {
+            return const Center(child: Text("Error loading favorites"));
+          }
 
-          if (favs.isEmpty) {
+          final favorites = snapshot.data?.docs ?? [];
+
+          // 📭 Empty
+          if (favorites.isEmpty) {
             return const Center(child: Text("No favorites yet"));
           }
 
+          // 📋 List
           return ListView.builder(
-            itemCount: favs.length,
+            padding: const EdgeInsets.all(10),
+            itemCount: favorites.length,
             itemBuilder: (context, index) {
-              final favDoc = favs[index];
 
-              return FutureBuilder<DocumentSnapshot>(
-                future: FirebaseFirestore.instance
-                    .collection('properties')
-                    .doc(favDoc.id)
-                    .get(),
-                builder: (context, snapshot) {
+              final doc = favorites[index];
+              final data = doc.data() as Map<String, dynamic>;
 
-                  if (!snapshot.hasData) {
-                    return const SizedBox();
-                  }
+              return Card(
+                elevation: 3,
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.all(12),
 
-                  final data =
-                      snapshot.data!.data() as Map<String, dynamic>?;
+                  // 🏠 Icon instead of image (fixes your crash)
+                  leading: const Icon(Icons.home, size: 32),
 
-                  if (data == null) return const SizedBox();
-
-                  return Card(
-                    margin: const EdgeInsets.all(10),
-                    child: ListTile(
-                      leading: Image.network(
-                        data['image'] ??
-                            "https://via.placeholder.com/150",
-                        width: 70,
-                        fit: BoxFit.cover,
-                      ),
-                      title: Text(data['title']),
-                      subtitle: Text("\$${data['price']}"),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => PropertyDetailScreen(
-                              propertyId: favDoc.id,
-                              data: data,
-                            ),
-                          ),
-                        );
-                      },
+                  // 📌 Property title
+                  title: Text(
+                    data['title'] ?? "Unknown Property",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
                     ),
-                  );
-                },
+                  ),
+
+                  // 💰 Price
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text("\$${data['price'] ?? 0}"),
+                  ),
+
+                  // ❌ Remove from favorites
+                  trailing: IconButton(
+                    icon: const Icon(Icons.favorite, color: Colors.red),
+                    onPressed: () async {
+                      await FirebaseFirestore.instance
+                          .collection('favorites')
+                          .doc(doc.id)
+                          .delete();
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Removed from favorites")),
+                      );
+                    },
+                  ),
+                ),
               );
             },
           );

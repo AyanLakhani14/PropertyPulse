@@ -46,7 +46,7 @@ class _BookingScreenState extends State<BookingScreen> {
     }
   }
 
-  // 🔥 BOOK
+  // 🔥 BOOK APPOINTMENT
   Future<void> bookAppointment() async {
     final user = FirebaseAuth.instance.currentUser;
 
@@ -59,6 +59,7 @@ class _BookingScreenState extends State<BookingScreen> {
       return;
     }
 
+    // Combine date + time
     final fullDateTime = DateTime(
       selectedDate!.year,
       selectedDate!.month,
@@ -67,11 +68,11 @@ class _BookingScreenState extends State<BookingScreen> {
       selectedTime!.minute,
     );
 
-    final ref =
+    final bookingsRef =
         FirebaseFirestore.instance.collection('bookings');
 
     // 🚫 Prevent double booking
-    final existing = await ref
+    final existing = await bookingsRef
         .where('propertyId', isEqualTo: widget.propertyId)
         .where('timeSlot', isEqualTo: fullDateTime)
         .get();
@@ -84,12 +85,22 @@ class _BookingScreenState extends State<BookingScreen> {
     }
 
     // ✅ SAVE BOOKING
-    await ref.add({
-      'propertyId': widget.propertyId,
-      'propertyTitle': widget.propertyTitle,
+    await bookingsRef.add({
       'userId': user.uid,
+      'propertyId': widget.propertyId,
+      'propertyTitle': widget.propertyTitle, // 🔥 IMPORTANT
       'timeSlot': fullDateTime,
-      'status': 'confirmed', // important
+      'status': 'confirmed',
+      'createdAt': Timestamp.now(),
+    });
+
+    // 🔔 SAVE NOTIFICATION (for FCM requirement)
+    await FirebaseFirestore.instance
+        .collection('notifications')
+        .add({
+      'userId': user.uid,
+      'message':
+          "Booking confirmed for ${widget.propertyTitle}",
       'createdAt': Timestamp.now(),
     });
 
@@ -117,7 +128,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
             Text(
               selectedDate != null
-                  ? "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}"
+                  ? "${selectedDate!.month}/${selectedDate!.day}/${selectedDate!.year}"
                   : "No date selected",
             ),
 

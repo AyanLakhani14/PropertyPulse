@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/property.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class AddPropertyScreen extends StatefulWidget {
   const AddPropertyScreen({super.key});
@@ -14,23 +16,71 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   final priceController = TextEditingController();
   final sizeController = TextEditingController();
   final locationController = TextEditingController();
+  final conditionController = TextEditingController();
 
-  int condition = 3;
+  File? imageFile;
 
-  void addProperty() async {
-    final property = Property(
-      title: titleController.text,
-      price: double.parse(priceController.text),
-      size: double.parse(sizeController.text),
-      location: locationController.text,
-      condition: condition,
+  // 📸 PICK IMAGE
+  Future<void> pickImage() async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+
+    if (picked != null) {
+      setState(() {
+        imageFile = File(picked.path);
+      });
+    }
+  }
+
+  // ☁️ UPLOAD TO FIREBASE STORAGE
+  Future<String?> uploadImage() async {
+    if (imageFile == null) return null;
+
+    final ref = FirebaseStorage.instance
+        .ref()
+        .child('property_images/${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+    await ref.putFile(imageFile!);
+
+    return await ref.getDownloadURL();
+  }
+
+  // ➕ ADD PROPERTY
+  Future<void> addProperty() async {
+    final cleanedPrice =
+        priceController.text.replaceAll(RegExp(r'[^0-9.]'), '');
+
+    final imageUrl = await uploadImage();
+
+    await FirebaseFirestore.instance.collection('properties').add({
+      'title': titleController.text,
+      'price': cleanedPrice.isEmpty ? 0 : double.parse(cleanedPrice),
+      'size': double.tryParse(sizeController.text) ?? 0,
+      'location': locationController.text,
+      'condition': int.tryParse(conditionController.text) ?? 3,
+      'image': imageUrl, // 🔥 STORAGE URL
+      'createdAt': Timestamp.now(),
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Property Added")),
     );
 
-    await FirebaseFirestore.instance
-        .collection('properties')
-        .add(property.toMap());
-
     Navigator.pop(context);
+  }
+
+  Widget input(String label, TextEditingController controller,
+      {TextInputType type = TextInputType.text}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: TextField(
+        controller: controller,
+        keyboardType: type,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+      ),
+    );
   }
 
   @override
@@ -38,37 +88,36 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text("Add Property")),
       body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
+        padding: const EdgeInsets.all(16),
+        child: ListView(
           children: [
-            TextField(controller: titleController, decoration: const InputDecoration(labelText: "Title")),
-            TextField(controller: priceController, decoration: const InputDecoration(labelText: "Price")),
-            TextField(controller: sizeController, decoration: const InputDecoration(labelText: "Size")),
-            TextField(controller: locationController, decoration: const InputDecoration(labelText: "Location")),
+            input("Title", titleController),
+            input("Price", priceController, type: TextInputType.number),
+            input("Size", sizeController, type: TextInputType.number),
+            input("Location", locationController),
+            input("Condition (1-5)", conditionController,
+                type: TextInputType.number),
 
             const SizedBox(height: 10),
 
-            DropdownButton<int>(
-              value: condition,
-              items: List.generate(5, (index) {
-                return DropdownMenuItem(
-                  value: index + 1,
-                  child: Text("Condition ${index + 1}"),
-                );
-              }),
-              onChanged: (value) {
-                setState(() {
-                  condition = value!;
-                });
-              },
+            // 📸 IMAGE BUTTON
+            ElevatedButton(
+              onPressed: pickImage,
+              child: const Text("Upload Image"),
             ),
+
+            if (imageFile != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Image.file(imageFile!, height: 120),
+              ),
 
             const SizedBox(height: 20),
 
             ElevatedButton(
               onPressed: addProperty,
               child: const Text("Add Property"),
-            )
+            ),
           ],
         ),
       ),

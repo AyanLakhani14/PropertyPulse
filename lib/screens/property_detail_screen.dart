@@ -1,17 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'booking_screen.dart';
 import 'edit_property_screen.dart';
 
-// 🔥 ESTIMATOR
 Map<String, dynamic> estimatePrice(Map<String, dynamic> data) {
   final size = (data['size'] ?? 1000).toDouble();
   final condition = (data['condition'] ?? 3).toDouble();
+  final location =
+      (data['location'] ?? "").toString().toLowerCase();
 
-  double estimate = (size * 150) + (condition * 10000);
+  double base = size * 150;
+
+  if (location.contains("atlanta")) base *= 1.2;
+  if (location.contains("buckhead")) base *= 1.3;
+  if (location.contains("tucker")) base *= 1.1;
+
+  base += condition * 10000;
 
   return {
-    'low': (estimate * 0.9).round(),
-    'high': (estimate * 1.1).round(),
+    'low': (base * 0.9).round(),
+    'high': (base * 1.1).round(),
     'confidence': condition >= 4
         ? "High"
         : condition <= 2
@@ -30,9 +39,17 @@ class PropertyDetailScreen extends StatelessWidget {
     required this.data,
   });
 
+  Future<List<QueryDocumentSnapshot>> getComparables() async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('properties')
+        .limit(3)
+        .get();
+    return snapshot.docs;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final estimate = estimatePrice(data);
+    final est = estimatePrice(data);
 
     return Scaffold(
       appBar: AppBar(title: const Text("Property Details")),
@@ -40,13 +57,10 @@ class PropertyDetailScreen extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         child: ListView(
           children: [
-
-            Text(
-              data['title'] ?? "",
-              style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold),
-            ),
+            Text(data['title'] ?? "",
+                style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold)),
 
             const SizedBox(height: 10),
 
@@ -57,7 +71,6 @@ class PropertyDetailScreen extends StatelessWidget {
 
             const SizedBox(height: 20),
 
-            // 🔥 ESTIMATOR
             Container(
               padding: const EdgeInsets.all(10),
               color: Colors.blue.shade50,
@@ -65,18 +78,43 @@ class PropertyDetailScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text("Estimated Price Range"),
-                  Text(
-                    "\$${estimate['low']} - \$${estimate['high']}",
-                    style: const TextStyle(fontSize: 18),
-                  ),
-                  Text("Confidence: ${estimate['confidence']}"),
+                  Text("\$${est['low']} - \$${est['high']}"),
+                  Text("Confidence: ${est['confidence']}"),
                 ],
               ),
             ),
 
             const SizedBox(height: 20),
 
-            // 📅 BOOK
+            const Text("Comparable Properties"),
+
+            FutureBuilder(
+              future: getComparables(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const CircularProgressIndicator();
+                }
+
+                final docs = snapshot.data!;
+
+                return Column(
+                  children: docs.map((doc) {
+                    final d =
+                        doc.data() as Map<String, dynamic>;
+
+                    return ListTile(
+                      leading: const Icon(Icons.home),
+                      title: Text(d['title'] ?? ""),
+                      subtitle:
+                          Text("\$${d['price'] ?? 0}"),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
+
+            const SizedBox(height: 20),
+
             ElevatedButton(
               onPressed: () {
                 Navigator.push(
@@ -92,9 +130,6 @@ class PropertyDetailScreen extends StatelessWidget {
               child: const Text("Book Viewing"),
             ),
 
-            const SizedBox(height: 10),
-
-            // ✏️ EDIT
             ElevatedButton(
               onPressed: () {
                 Navigator.push(

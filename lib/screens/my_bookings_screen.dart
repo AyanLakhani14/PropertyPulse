@@ -5,11 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 class MyBookingsScreen extends StatelessWidget {
   const MyBookingsScreen({super.key});
 
-  String formatDate(DateTime date) {
-    return "${date.month}/${date.day}/${date.year} "
-        "${date.hour}:${date.minute.toString().padLeft(2, '0')}";
-  }
-
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
@@ -20,92 +15,104 @@ class MyBookingsScreen extends StatelessWidget {
         stream: FirebaseFirestore.instance
             .collection('bookings')
             .where('userId', isEqualTo: user?.uid)
-            .snapshots(), // 🔥 removed orderBy (safer)
+            .snapshots(),
         builder: (context, snapshot) {
 
-          // 🔄 LOADING
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // ❌ ERROR
           if (snapshot.hasError) {
-            return Center(
-              child: Text("Error: ${snapshot.error}"),
-            );
+            return const Center(child: Text("Error loading bookings"));
           }
 
-          // 📭 EMPTY
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          final bookings = snapshot.data?.docs ?? [];
+
+          if (bookings.isEmpty) {
             return const Center(child: Text("No bookings yet"));
           }
 
-          final bookings = snapshot.data!.docs;
-
           return ListView.builder(
+            padding: const EdgeInsets.all(10),
             itemCount: bookings.length,
             itemBuilder: (context, index) {
 
               final doc = bookings[index];
               final data = doc.data() as Map<String, dynamic>;
 
-              final date =
-                  (data['timeSlot'] as Timestamp).toDate();
-
+              final date = (data['timeSlot'] as Timestamp).toDate();
               final status = data['status'] ?? "confirmed";
 
               return Card(
-                elevation: 5,
-                margin: const EdgeInsets.all(10),
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                elevation: 3,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: ListTile(
+                  contentPadding: const EdgeInsets.all(12),
 
-                  leading: const Icon(Icons.home),
+                  leading: const Icon(Icons.home, size: 32),
 
                   title: Text(
                     data['propertyTitle'] ?? "Unknown Property",
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
+                      fontSize: 16,
                     ),
                   ),
 
-                  subtitle: Text(formatDate(date)),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      "${date.month}/${date.day}/${date.year} • "
+                      "${date.hour}:${date.minute.toString().padLeft(2, '0')}",
+                    ),
+                  ),
 
-                  trailing: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
+                  // 🔥 FIXED TRAILING (NO OVERFLOW)
+                  trailing: SizedBox(
+                    width: 120,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
 
-                      // 🔥 STATUS
-                      Text(
-                        status.toUpperCase(),
-                        style: TextStyle(
-                          color: status == "confirmed"
-                              ? Colors.green
-                              : Colors.red,
-                          fontWeight: FontWeight.bold,
+                        Text(
+                          status.toUpperCase(),
+                          style: TextStyle(
+                            color: status == "confirmed"
+                                ? Colors.green
+                                : Colors.red,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
 
-                      // ❌ CANCEL BUTTON
-                      if (status == "confirmed")
-                        TextButton(
-                          onPressed: () async {
-                            await FirebaseFirestore.instance
-                                .collection('bookings')
-                                .doc(doc.id)
-                                .update({'status': 'cancelled'});
+                        const SizedBox(width: 8),
 
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("Booking cancelled"),
+                        if (status == "confirmed")
+                          GestureDetector(
+                            onTap: () async {
+                              await FirebaseFirestore.instance
+                                  .collection('bookings')
+                                  .doc(doc.id)
+                                  .update({'status': 'cancelled'});
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Booking cancelled"),
+                                ),
+                              );
+                            },
+                            child: const Text(
+                              "Cancel",
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontWeight: FontWeight.bold,
                               ),
-                            );
-                          },
-                          child: const Text("Cancel"),
-                        ),
-                    ],
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               );
