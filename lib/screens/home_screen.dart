@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'add_property_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -22,30 +23,46 @@ class HomeScreen extends StatelessWidget {
         ],
       ),
 
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              "Logged in ✅",
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('properties')
+            .orderBy('createdAt', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
 
-            const SizedBox(height: 10),
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-            Text(
-              user?.email ?? "No Email",
-              style: const TextStyle(fontSize: 16),
-            ),
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(child: Text("No properties yet"));
+          }
 
-            const SizedBox(height: 30),
+          final properties = snapshot.data!.docs;
 
-            const Text(
-              "Tap + to add a property",
-              style: TextStyle(color: Colors.grey),
-            ),
-          ],
-        ),
+          return ListView.builder(
+            itemCount: properties.length,
+            itemBuilder: (context, index) {
+              final data = properties[index];
+
+              return Card(
+                margin: const EdgeInsets.all(10),
+                child: ListTile(
+                  title: Text(data['title']),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("Price: \$${data['price']}"),
+                      Text("Size: ${data['size']} sqft"),
+                      Text("Location: ${data['location']}"),
+                      Text("Condition: ${data['condition']}"),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
       ),
 
       floatingActionButton: FloatingActionButton(
