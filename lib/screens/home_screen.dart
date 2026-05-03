@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'add_property_screen.dart';
 import 'chat_screen.dart';
+import 'booking_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -53,8 +55,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text("PropertyPulse"),
@@ -70,7 +70,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       body: Column(
         children: [
-          // 🔍 Search Bar
+          // 🔍 Search
           Padding(
             padding: const EdgeInsets.all(10),
             child: TextField(
@@ -87,7 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // 💰 Price Slider
+          // 💰 Price Filter
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: Column(
@@ -155,16 +155,28 @@ class _HomeScreenState extends State<HomeScreen> {
                             Text("Size: ${data['size']} sqft"),
                             Text("Location: ${data['location']}"),
                             Text("Condition: ${data['condition']}"),
+
+                            // 📅 Booking Button
+                            TextButton(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => BookingScreen(propertyId: doc.id),
+                                  ),
+                                );
+                              },
+                              child: const Text("Book Viewing"),
+                            ),
                           ],
                         ),
 
-                        // 👉 OPEN CHAT ON TAP
+                        // 💬 Chat on Tap
                         onTap: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) =>
-                                  ChatScreen(propertyId: doc.id),
+                              builder: (_) => ChatScreen(propertyId: doc.id),
                             ),
                           );
                         },
