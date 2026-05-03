@@ -23,7 +23,10 @@ class PropertyDetailScreen extends StatelessWidget {
           children: [
             Text(
               data['title'],
-              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 15),
 
@@ -53,7 +56,10 @@ class PropertyDetailScreen extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => BookingScreen(propertyId: propertyId),
+                    builder: (_) => BookingScreen(
+                      propertyId: propertyId,
+                      propertyTitle: data['title'], // ✅ FIX
+                    ),
                   ),
                 );
               },

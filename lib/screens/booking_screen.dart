@@ -4,8 +4,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 class BookingScreen extends StatefulWidget {
   final String propertyId;
+  final String propertyTitle;
 
-  const BookingScreen({super.key, required this.propertyId});
+  const BookingScreen({
+    super.key,
+    required this.propertyId,
+    required this.propertyTitle,
+  });
 
   @override
   State<BookingScreen> createState() => _BookingScreenState();
@@ -41,7 +46,15 @@ class _BookingScreenState extends State<BookingScreen> {
 
   void bookAppointment() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null || selectedDate == null || selectedTime == null) return;
+
+    if (user == null ||
+        selectedDate == null ||
+        selectedTime == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Select date and time")),
+      );
+      return;
+    }
 
     final fullDateTime = DateTime(
       selectedDate!.year,
@@ -69,6 +82,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
     await appointmentRef.add({
       'propertyId': widget.propertyId,
+      'propertyTitle': widget.propertyTitle, // ✅ FIXED
       'userId': user.uid,
       'timeSlot': fullDateTime,
       'createdAt': Timestamp.now(),
@@ -94,7 +108,11 @@ class _BookingScreenState extends State<BookingScreen> {
               child: const Text("Select Date"),
             ),
 
-            Text(selectedDate?.toString() ?? "No date selected"),
+            Text(
+              selectedDate != null
+                  ? "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}"
+                  : "No date selected",
+            ),
 
             const SizedBox(height: 10),
 
@@ -103,7 +121,11 @@ class _BookingScreenState extends State<BookingScreen> {
               child: const Text("Select Time"),
             ),
 
-            Text(selectedTime?.format(context) ?? "No time selected"),
+            Text(
+              selectedTime != null
+                  ? selectedTime!.format(context)
+                  : "No time selected",
+            ),
 
             const SizedBox(height: 30),
 
