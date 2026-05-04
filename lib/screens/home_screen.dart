@@ -51,7 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
         .map((doc) => doc.exists);
   }
 
-  // 🔍 SEARCH FILTER
+  // 🔍 SEARCH
   bool matchesSearch(Map<String, dynamic> data) {
     final title = (data['title'] ?? "").toString().toLowerCase();
     final location = (data['location'] ?? "").toString().toLowerCase();
@@ -65,9 +65,20 @@ class _HomeScreenState extends State<HomeScreen> {
     return price <= maxPrice;
   }
 
-  // 🧠 COMBINED FILTER
   bool shouldShow(Map<String, dynamic> data) {
     return matchesSearch(data) && matchesPrice(data);
+  }
+
+  // 🗑️ DELETE PROPERTY
+  Future<void> deleteProperty(String propertyId) async {
+    await FirebaseFirestore.instance
+        .collection('properties')
+        .doc(propertyId)
+        .delete();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Property deleted")),
+    );
   }
 
   @override
@@ -108,6 +119,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       body: Column(
         children: [
+
           // 🔍 SEARCH BAR
           Padding(
             padding: const EdgeInsets.all(10),
@@ -143,16 +155,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   divisions: 20,
                   value: maxPrice,
                   onChanged: (value) {
-                    setState(() {
-                      maxPrice = value;
-                    });
+                    setState(() => maxPrice = value);
                   },
                 ),
               ],
             ),
           ),
 
-          // 📦 PROPERTY LIST
+          // 📦 LIST
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -160,16 +170,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   .snapshots(),
               builder: (context, snapshot) {
 
-                if (snapshot.connectionState ==
-                    ConnectionState.waiting) {
+                if (!snapshot.hasData) {
                   return const Center(
                       child: CircularProgressIndicator());
-                }
-
-                if (!snapshot.hasData ||
-                    snapshot.data!.docs.isEmpty) {
-                  return const Center(
-                      child: Text("No properties found"));
                 }
 
                 final docs = snapshot.data!.docs.where((doc) {
@@ -177,6 +180,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       doc.data() as Map<String, dynamic>;
                   return shouldShow(data);
                 }).toList();
+
+                if (docs.isEmpty) {
+                  return const Center(
+                      child: Text("No properties found"));
+                }
 
                 return ListView.builder(
                   itemCount: docs.length,
@@ -220,27 +228,71 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
 
-                        trailing: StreamBuilder<bool>(
-                          stream: isFavorited(propertyId),
-                          builder: (context, snapshot) {
-                            final fav =
-                                snapshot.data ?? false;
+                        // 🔥 FAVORITE + DELETE
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
 
-                            return IconButton(
-                              icon: Icon(
-                                fav
-                                    ? Icons.favorite
-                                    : Icons.favorite_border,
-                                color: fav
-                                    ? Colors.red
-                                    : Colors.grey,
-                              ),
-                              onPressed: () => toggleFavorite(
-                                  propertyId, data),
-                            );
-                          },
+                            // ❤️ FAVORITE
+                            StreamBuilder<bool>(
+                              stream: isFavorited(propertyId),
+                              builder: (context, snapshot) {
+                                final fav = snapshot.data ?? false;
+
+                                return IconButton(
+                                  icon: Icon(
+                                    fav
+                                        ? Icons.favorite
+                                        : Icons.favorite_border,
+                                    color: fav
+                                        ? Colors.red
+                                        : Colors.grey,
+                                  ),
+                                  onPressed: () =>
+                                      toggleFavorite(propertyId, data),
+                                );
+                              },
+                            ),
+
+                            // 🗑️ DELETE
+                            IconButton(
+                              icon: const Icon(Icons.delete,
+                                  color: Colors.red),
+                              onPressed: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text("Delete Property"),
+                                    content: const Text(
+                                        "Are you sure you want to delete this property?"),
+                                    actions: [
+
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context),
+                                        child: const Text("Cancel"),
+                                      ),
+
+                                      TextButton(
+                                        onPressed: () async {
+                                          await deleteProperty(propertyId);
+                                          Navigator.pop(context);
+                                        },
+                                        child: const Text(
+                                          "Delete",
+                                          style:
+                                              TextStyle(color: Colors.red),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
                         ),
 
+                        // 🔗 NAVIGATION
                         onTap: () {
                           Navigator.push(
                             context,
